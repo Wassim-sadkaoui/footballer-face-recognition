@@ -1,63 +1,80 @@
 import cv2
-import numpy as np
 import pickle
+import numpy as np
+
 from insightface.app import FaceAnalysis
+from sklearn.metrics.pairwise import cosine_similarity
 
 
-# LOAD MODEL
+app = FaceAnalysis()
+app.prepare(ctx_id=0)
 
-app = FaceAnalysis(name="buffalo_l")
-app.prepare(ctx_id=0, det_size=(640, 640))
-
-
-# LOAD DATABASE
 
 with open("encodings/encodings.pkl", "rb") as f:
-    data = pickle.load(f)
+    database = pickle.load(f)
 
-known_embeddings = np.array(data["embeddings"])
-known_names = data["names"]
-
-
-# COSINE SIMILARITY
-
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+THRESHOLD = 0.35
 
 
-# PREDICT FUNCTION
+def recognize_face(image_path):
 
-def predict(image_path, threshold=0.35):
-    img = cv2.imread(image_path)
+    image = cv2.imread(image_path)
 
-    if img is None:
-        return "Invalid image"
-
-    faces = app.get(img)
+    faces = app.get(image)
 
     if len(faces) == 0:
-        return "No face detected"
+        return image, "No face detected"
 
-    query_embedding = faces[0].embedding
+    best_result = "Unknown"
 
-    best_score = -1
-    best_name = "Unknown"
+    for face in faces:
 
-    for emb, name in zip(known_embeddings, known_names):
-        score = cosine_similarity(query_embedding, emb)
+        embedding = face.embedding
 
-        if score > best_score:
-            best_score = score
-            best_name = name
+        best_match = "Unknown"
+        best_score = -1
 
-    if best_score < threshold:
-        return "Unknown"
+        for player_name, embeddings in database.items():
 
-    return f"{best_name} ({best_score:.2f})"
+            for db_embedding in embeddings:
 
+                similarity = cosine_similarity(
+                    [embedding],
+                    [db_embedding]
+                )[0][0]
 
-# TEST
+                if similarity > best_score:
+                    best_score = similarity
+                    best_match = player_name
 
-if __name__ == "__main__":
-    result = predict("test.jpg")
-    print("[RESULT]:", result)
+        if best_score < THRESHOLD:
+            label = "Unknown"
+        else:
+            label = f"{best_match} ({best_score:.2f})"
+
+        # Face box coordinates
+        x1, y1, x2, y2 = map(int, face.bbox)
+
+        # Draw rectangle
+        cv2.rectangle(
+            image,
+            (x1, y1),
+            (x2, y2),
+            (0, 255, 0),
+            2
+        )
+
+        # Draw text
+        cv2.putText(
+            image,
+            label,
+            (x1, y1 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2
+        )
+
+        best_result = label
+
+    return image, best_match, best_score
