@@ -59,10 +59,6 @@ football-face-recognition/
 ├── README.md
 │
 ├── dataset/
-│   ├── messi/
-│   ├── ronaldo/
-│   └── neymar/
-│
 ├── dataset_builder/
 │   └── datasetbuilder.py
 │
