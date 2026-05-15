@@ -1,65 +1,57 @@
 import os
-import cv2
-import numpy as np
 import pickle
+import cv2
+
 from insightface.app import FaceAnalysis
 
-# -----------------------------
-# INIT MODEL
-# -----------------------------
-app = FaceAnalysis(name="buffalo_l")
-app.prepare(ctx_id=0, det_size=(640, 640))
+# Initialize InsightFace
+app = FaceAnalysis()
+app.prepare(ctx_id=0)
 
 DATASET_PATH = "dataset"
-OUTPUT_FILE = "encodings/encodings.pkl"
 
-known_embeddings = []
-known_names = []
+database = {}
 
-print("[INFO] Starting encoding process...")
+# Loop through each player folder
+for player_name in os.listdir(DATASET_PATH):
 
-# -----------------------------
-# LOOP DATASET
-# -----------------------------
-for person_name in os.listdir(DATASET_PATH):
-    person_folder = os.path.join(DATASET_PATH, person_name)
+    player_folder = os.path.join(
+        DATASET_PATH,
+        player_name
+    )
 
-    if not os.path.isdir(person_folder):
+    if not os.path.isdir(player_folder):
         continue
 
-    print(f"[INFO] Processing: {person_name}")
+    embeddings = []
 
-    for img_name in os.listdir(person_folder):
-        img_path = os.path.join(person_folder, img_name)
+    # Loop through images
+    for image_name in os.listdir(player_folder):
 
-        img = cv2.imread(img_path)
+        image_path = os.path.join(
+            player_folder,
+            image_name
+        )
 
-        if img is None:
+        image = cv2.imread(image_path)
+
+        if image is None:
             continue
 
-        faces = app.get(img)
+        faces = app.get(image)
 
         if len(faces) == 0:
             continue
 
-        # take first face
+        # Take first detected face
         embedding = faces[0].embedding
 
-        known_embeddings.append(embedding)
-        known_names.append(person_name)
+        embeddings.append(embedding)
 
-# -----------------------------
-# SAVE DATABASE
-# -----------------------------
-data = {
-    "embeddings": np.array(known_embeddings),
-    "names": known_names
-}
+    database[player_name] = embeddings
 
-os.makedirs("encodings", exist_ok=True)
+# Save database
+with open("encodings/encodings.pkl", "wb") as f:
+    pickle.dump(database, f)
 
-with open(OUTPUT_FILE, "wb") as f:
-    pickle.dump(data, f)
-
-print("[INFO] Encoding complete!")
-print(f"[INFO] Saved {len(known_embeddings)} faces.")
+print("Encodings saved successfully!")
